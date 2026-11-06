@@ -1,0 +1,46 @@
+name: Qualidade da Central PG Bot
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  logica:
+    name: Regras e integridade
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Sintaxe JavaScript
+        run: node --check app.js
+      - name: Testes de regras
+        run: node --test tests/core-tests.cjs
+      - name: Manifesto e estrutura
+        run: |
+          python3 -m json.tool manifest.json > /dev/null
+          python3 -m py_compile tests/smoke_v15.py
+          test -f assets/favicon.svg
+
+  navegadores:
+    name: Interface mobile 320 e 390 px
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar Playwright
+        run: |
+          python -m pip install --upgrade pip
+          pip install playwright==1.58.0
+          python -m playwright install --with-deps chromium firefox webkit
+      - name: Validar 3 motores em 2 resoluções
+        run: python tests/smoke_v15.py
