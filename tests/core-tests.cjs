@@ -330,3 +330,17 @@ test('falha do armazenamento não impede renderizar o registro em memória para 
  assert.match(el('#saveIndicator').textContent,/não salvo|exporte/i);
  assert.match(el('#historyList').innerHTML,/Critério atualizado/);
 });
+
+test('ativar o SW de homologação preserva caches offline de outros projetos GitHub Pages',async()=>{
+ const listeners={};const removed=[];
+ const cacheNames=['pgbot-console-v1-7','pgbot-console-v1-6','pg-arcade-shell-v4','pgbot-main-v3','pg-estrategia-cofre-v1','outra-aplicacao'];
+ const self={location:{origin:'https://pabloguilherme1121.github.io'},
+  addEventListener:(name,handler)=>{listeners[name]=handler},
+  skipWaiting(){},clients:{claim(){return Promise.resolve()}}};
+ const caches={keys:async()=>cacheNames,delete:async name=>{removed.push(name);return true}};
+ vm.runInNewContext(fs.readFileSync(__dirname+'/../service-worker.js','utf8'),{URL,Promise,console,self,caches,fetch:async()=>{}});
+ let activated;
+ listeners.activate({waitUntil:p=>{activated=p}});
+ await activated;
+ assert.deepEqual(removed,['pgbot-console-v1-6'],'a aplicação só pode remover suas versões antigas');
+});
