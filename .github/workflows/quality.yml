@@ -45,4 +45,6 @@ jobs:
       - name: Validar Chromium, Firefox e WebKit em 320/390 px
         run: python tests/smoke_v15.py
       - name: Proteger registros em duas abas
+        env:
+          PG_USE_HTTP: '1'
         run: python tests/cross_tab_smoke.py
