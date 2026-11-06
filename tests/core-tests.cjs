@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('fs');
 const vm=require('node:vm');
-const source=fs.readFileSync(__dirname+'/../app.js','utf8');
+const source=fs.readFileSync(__dirname+'/../app.js','utf8').replace(/\r\n/g,'\n');
 function env(options={}){
   const elements=new Map();
   const el=selector=>{if(!elements.has(selector))elements.set(selector,{value:selector.startsWith('#filter')?'all':'',textContent:'',innerHTML:'',dataset:{},style:{},classList:{add(){},remove(){},toggle(){}},addEventListener(){},querySelectorAll(){return []},focus(){},close(){},showModal(){},reset(){},setAttribute(){},removeAttribute(){},getAttribute(){return ''}});return elements.get(selector)};
