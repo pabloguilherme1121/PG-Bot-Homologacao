@@ -66,6 +66,18 @@ with sync_playwright() as p:
             page.locator('#refreshGithub').click()
             page.wait_for_function('document.querySelectorAll("#githubRuns .github-run").length === 3')
             assert 'sem alteração automática' in page.locator('#githubErrors').inner_text().lower()
+            if width < 750:
+                page.locator('#openMenu').click()
+            page.locator('#sidebar [data-page="acoes"]').click()
+            initial_actions = page.locator('#allActions .action-item').count()
+            assert page.locator('#generateBlockerActions').is_visible()
+            page.locator('#generateBlockerActions').click()
+            generated_actions = page.locator('#allActions .action-item').count()
+            assert generated_actions > initial_actions, f'Nenhuma ação adicionada em {engine} {width}'
+            assert page.locator('#autoActionsHint').inner_text().startswith('0 sugestão')
+            page.locator('#generateBlockerActions').click()
+            assert page.locator('#allActions .action-item').count() == generated_actions
+            assert '0 de 3' in page.locator('#releaseMini').inner_text()
             size = page.evaluate('({scroll:document.documentElement.scrollWidth,viewport:window.innerWidth})')
             assert size['scroll'] <= size['viewport'] + 1, f'Overflow {engine} {width}: {size}'
             assert not errors, f'{engine} {width}: {errors}'

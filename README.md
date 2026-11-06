@@ -57,3 +57,11 @@ O manifesto PWA usa `manifest.json`, caminho compatível com a hospedagem de pro
 - Se o armazenamento do navegador estiver indisponível, o painel continua visível em memória e solicita exportação JSON; não afirma ter salvado.
 - **Não é sincronização na nuvem ou entre dispositivos.** A proteção se aplica ao armazenamento da mesma origem do navegador.
 - QA: `node --test tests/core-tests.cjs`, `python tests/smoke_v15.py` (Chromium/Firefox/WebKit 320/390) e `python tests/cross_tab_smoke.py` (conflito de abas em 320/390). Para rodar Chromium localmente: `PG_BROWSERS=chromium python tests/smoke_v15.py`.
+
+## v1.8 | Ações locais a partir de bloqueios
+
+- Em **Fila de próximas ações**, use **Criar ações dos bloqueios** para converter o resultado atual da auditoria dos três projetos em tarefas pendentes.
+- Pendências da mesma PR são agrupadas numa tarefa; há títulos, prioridade e plano mínimo por categoria (SHA-alvo, Playwright, Android físico, críticos, PR).
+- Repetir a operação não duplica tarefas. Tarefas já editadas pelo usuário não são sobrescritas; a fila segue no armazenamento local e participa do backup JSON.
+- A criação não consulta repositórios, não executa CI e **não marca revisão, aprovação, merge ou deploy como comprovados**. A confirmação exige evidências próprias, no SHA correto.
+- Testes de regressão: `node --test tests/core-tests.cjs`.
