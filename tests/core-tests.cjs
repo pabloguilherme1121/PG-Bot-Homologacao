@@ -330,3 +330,35 @@ test('falha do armazenamento não impede renderizar o registro em memória para 
  assert.match(el('#saveIndicator').textContent,/não salvo|exporte/i);
  assert.match(el('#historyList').innerHTML,/Critério atualizado/);
 });
+
+test('ativar o SW de homologação preserva caches offline de outros projetos GitHub Pages',async()=>{
+ const listeners={};const removed=[];
+ const cacheNames=['pgbot-console-v1-7','pgbot-console-v1-6','pg-arcade-shell-v4','pgbot-main-v3','pg-estrategia-cofre-v1','outra-aplicacao'];
+ const self={location:{origin:'https://pabloguilherme1121.github.io'},
+  addEventListener:(name,handler)=>{listeners[name]=handler},
+  skipWaiting(){},clients:{claim(){return Promise.resolve()}}};
+ const caches={keys:async()=>cacheNames,delete:async name=>{removed.push(name);return true}};
+ vm.runInNewContext(fs.readFileSync(__dirname+'/../service-worker.js','utf8'),{URL,Promise,console,self,caches,fetch:async()=>{}});
+ let activated;
+ listeners.activate({waitUntil:p=>{activated=p}});
+ await activated;
+ assert.deepEqual(removed,['pgbot-console-v1-6'],'a aplicação só pode remover suas versões antigas');
+});
+
+test('SW de homologação não intercepta recursos de outro projeto da mesma origem',async()=>{
+ const listeners={};
+ const origin='https://pabloguilherme1121.github.io';
+ const scope=origin+'/PG-Bot-Homologacao/';
+ const self={location:{origin},registration:{scope},addEventListener:(kind,fn)=>listeners[kind]=fn,
+  skipWaiting(){},clients:{claim(){return Promise.resolve()}}};
+ const caches={open:async()=>({addAll:async()=>{},put:async()=>{}}),keys:async()=>[],
+  match:async()=>null,delete:async()=>true};
+ vm.runInNewContext(fs.readFileSync(__dirname+'/../service-worker.js','utf8'),
+  {URL,Promise,console,self,caches,fetch:async()=>({ok:true,clone(){return this}}),Response:{error:()=>new Error('offline')}});
+ let intercepted=0;
+ const makeRequest=path=>({request:{method:'GET',url:origin+path,mode:'cors'},respondWith(){intercepted++}});
+ listeners.fetch(makeRequest('/PG-Bot/app.js'));
+ assert.equal(intercepted,0,'arquivos de outro app não devem entrar no cache da homologação');
+ listeners.fetch(makeRequest('/PG-Bot-Homologacao/app.js'));
+ assert.equal(intercepted,1,'o próprio projeto mantém o comportamento de rede primeiro');
+});
