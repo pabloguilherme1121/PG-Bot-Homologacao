@@ -163,3 +163,11 @@
 
 /* Firefox/WebKit: evitar que a barra fixa cubra o botão de atualização após scrollIntoView. */
 #refreshGithub{scroll-margin-top:86px}
+
+/* v1.8 | Ações locais derivadas dos bloqueios */
+.action-controls{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:10px}
+.action-controls .btn{min-height:44px;white-space:normal;text-align:center}
+.auto-actions-hint{border-left:3px solid var(--accent);background:#171d30;color:#b4c0d9;font-size:12px;line-height:1.6;border-radius:0 8px 8px 0;padding:12px 15px;margin:0 0 17px}
+.action-desc{white-space:pre-line;overflow-wrap:anywhere}
+@media(max-width:750px){.action-controls{width:100%;justify-content:stretch}.action-controls .btn{flex:1;min-width:135px}.auto-actions-hint{font-size:12px}}
+@media(max-width:370px){.action-controls .btn{min-width:100%;width:100%}}

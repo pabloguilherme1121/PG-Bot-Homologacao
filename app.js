@@ -363,8 +363,54 @@
   function renderMetrics(){const c=counts(state.criteria);const data=[['Comprovados',c.comprovado,'Prova vinculada ao critério','◉','#6bd4b8'],['Pendentes',c.pendente,'Aguardam validação','◷','#eabb74'],['Bloqueados',c.bloqueado,'Impedimentos registrados','⊘','#ec8faa'],['Hipóteses',c.hipotese,'Ainda sem confirmação','◇','#ac9dff']];$('#metrics').innerHTML=data.map(([label,value,sub,ico,color])=>`<div class="metric" style="--metric-color:${color}"><div class="metric-label"><span class="metric-icon">${ico}</span>${label}</div><div class="metric-value">${value}</div><div class="metric-sub">${sub}</div></div>`).join('');$('#navCriteriaCount').textContent=state.criteria.length}
   function projectCard(p,compact=false){const l=projectList(p),c=counts(l),per=percent(l);const theme=p==='estrategia'?['#8cb7ff','#232d45','#43618f','rgba(70,92,170,.21)','♜']:p==='arcade'?['#64d7bd','#1d353c','#3a6861','rgba(38,148,134,.16)','▦']:['#ac9bff','#2a2347','#5f508e','rgba(121,96,214,.17)','◇'];const [fg,bg,border,glow,icon]=theme;return `<div class="project-card ${compact?'compact-card':''}" style="--project-fg:${fg};--project-bg:${bg};--project-border:${border};--project-glow:${glow}"><div class="project-head"><div class="project-symbol">${icon}</div><div><h3>${PROJECT[p]}</h3><p>${l.length} critérios monitorados</p></div><span class="project-state">${per}% verificado</span></div><div class="readiness-row"><span>Com evidência registrada</span><strong>${l.filter(r=>r.status==='comprovado'&&safeUrl(r.evidence)).length}<span style="font-size:14px;color:#7e8ca9;font-weight:500"> / ${l.length}</span></strong></div><div class="progress-track"><div class="progress-fill" style="width:${per}%"></div></div><div class="project-foot"><div class="status-mini"><span><i class="mini-dot" style="--dot:#82d9b7"></i>${c.comprovado} comprovados</span><span><i class="mini-dot" style="--dot:#e3bd82"></i>${c.pendente} pendentes</span><span><i class="mini-dot" style="--dot:#ed93ab"></i>${c.bloqueado} bloqueados</span></div>${href(GH+(p==='bot'?'PG-Bot':p==='estrategia'?'PG-Estrategia':'PG-Arcade'), 'GitHub ↗')}</div></div>`}
   function renderProjects(){$('#projectCards').innerHTML=projectCard('estrategia')+projectCard('arcade')+projectCard('bot');$('#comparisonCards').innerHTML=projectCard('estrategia',true)+projectCard('arcade',true)+projectCard('bot',true)}
+  function suggestedActions(){
+    const proposals=[];
+    for(const project of Object.keys(PROJECT)){
+      const grouped=new Map();
+      for(const blocker of releaseAudit(project).blockers){
+        const prMatch=blocker.key==='pr'?/^PR #(\d+):/.exec(blocker.label):null;
+        const key=prMatch?'pr-'+prMatch[1]:blocker.key;
+        if(!grouped.has(key))grouped.set(key,[]);
+        grouped.get(key).push(blocker.label);
+      }
+      for(const [key,labels] of grouped){
+        const isPr=key.startsWith('pr-');
+        const titles={
+          target:'Definir SHA-alvo e build de '+PROJECT[project],
+          qa:'Validar Playwright 320/390 de '+PROJECT[project],
+          android:'Homologar '+PROJECT[project]+' em Android físico',
+          critical:'Revisar critérios críticos de '+PROJECT[project]
+        };
+        const title=isPr?'Revisar gates da PR #'+key.slice(3)+' · '+PROJECT[project]:(titles[key]||'Revisar bloqueios · '+PROJECT[project]);
+        const advice=key==='target'?'Registrar o SHA completo e o link do build sem inferir deploy.'
+          :key==='qa'?'Executar Chromium, Firefox e WebKit em 320/390, anexando evidências para o SHA-alvo.'
+          :key==='android'?'Validar seis cenários em aparelho real, com modelo, data, SHA e artefatos.'
+          :key==='critical'?'Comparar critérios e contratos legados, corrigir o mínimo e repetir os testes.'
+          :'Inspecionar HEAD, checklist, aprovação, merge e deploy separadamente, com provas do SHA correto.';
+        proposals.push({
+          id:'audit-'+project+'-'+key,title,project,
+          priority:['android','critical'].includes(key)?'critica':'alta',
+          status:'pendente',owner:'A definir',evidence:'',
+          plan:'Bloqueios observados:\n'+labels.map(label=>'- '+label).join('\n')+'\nPróximo passo: '+advice
+        });
+      }
+    }
+    return proposals;
+  }
+  function addBlockerActions(){
+    if(hasStorageConflict()){
+      showStorageConflict();notify('Outra aba alterou os dados. Exporte o rascunho e recarregue antes de criar ações.');return 0;
+    }
+    const existing=new Set(state.actions.map(a=>a.id));
+    const added=suggestedActions().filter(a=>!existing.has(a.id));
+    if(!added.length){notify('Nenhuma nova ação: bloqueios já estão na fila ou foram resolvidos.');return 0}
+    state.actions.push(...added);
+    const persisted=save('Ações locais geradas dos bloqueios',added.length+' sugestões pendentes, agrupadas por projeto e PR. Nenhum gate foi concluído automaticamente.');
+    notify(persisted?added.length+' ações pendentes adicionadas à fila local.':'Ações em memória. Exporte JSON: salvamento indisponível.');
+    return added.length;
+  }
   function sortedActions(){return [...state.actions].sort((a,b)=>(a.status==='comprovado'?1:0)-(b.status==='comprovado'?1:0)|| (priorityOrder[a.priority]??3)-(priorityOrder[b.priority]??3))}
-  function renderQueue(){$('#shortQueue').innerHTML=sortedActions().filter(a=>a.status!=='comprovado').slice(0,5).map((a,i)=>`<div class="queue-item"><div class="queue-rank">${String(i+1).padStart(2,'0')}</div><div class="queue-copy"><strong>${escape(a.title)}</strong><small>${escape(PROJECT[a.project])} · ${escape(a.owner||'Sem responsável')}</small></div>${priorityChip(a.priority)}</div>`).join('')||'<div class="empty">Sem ações abertas.</div>';$('#allActions').innerHTML=sortedActions().map((a,i)=>`<article class="action-item"><div class="action-number">${String(i+1).padStart(2,'0')}</div><div><h3 class="action-title">${escape(a.title)}</h3><div class="action-meta">${projectTag(a.project)} ${priorityChip(a.priority)} ${statusChip(a.status)} <span class="tag">${escape(a.owner||'Sem responsável')}</span></div><p class="action-desc">${escape(a.plan||'Plano não registrado.')}</p>${a.evidence?href(a.evidence,'Abrir PR / evidência ↗'):''}</div><div class="action-side"><button class="item-edit" data-open-action="${escape(a.id)}">Editar</button></div></article>`).join('')||'<div class="empty">Sem ações cadastradas.</div>'}
+  function renderQueue(){const missing=suggestedActions().filter(a=>!state.actions.some(old=>old.id===a.id)).length;$('#autoActionsHint').textContent=missing+' sugestão(ões) geradas a partir dos bloqueios atuais ainda não adicionada(s). A criação é local, não executa testes nem altera gates.';$('#shortQueue').innerHTML=sortedActions().filter(a=>a.status!=='comprovado').slice(0,5).map((a,i)=>`<div class="queue-item"><div class="queue-rank">${String(i+1).padStart(2,'0')}</div><div class="queue-copy"><strong>${escape(a.title)}</strong><small>${escape(PROJECT[a.project])} · ${escape(a.owner||'Sem responsável')}</small></div>${priorityChip(a.priority)}</div>`).join('')||'<div class="empty">Sem ações abertas.</div>';$('#allActions').innerHTML=sortedActions().map((a,i)=>`<article class="action-item"><div class="action-number">${String(i+1).padStart(2,'0')}</div><div><h3 class="action-title">${escape(a.title)}</h3><div class="action-meta">${projectTag(a.project)} ${priorityChip(a.priority)} ${statusChip(a.status)} <span class="tag">${escape(a.owner||'Sem responsável')}</span></div><p class="action-desc">${escape(a.plan||'Plano não registrado.')}</p>${a.evidence?href(a.evidence,'Abrir PR / evidência ↗'):''}</div><div class="action-side"><button class="item-edit" data-open-action="${escape(a.id)}">Editar</button></div></article>`).join('')||'<div class="empty">Sem ações cadastradas.</div>'}
   function renderHistory(){const act=[...state.history].sort((a,b)=>String(b.date).localeCompare(String(a.date)));$('#shortHistory').innerHTML=act.slice(0,5).map(x=>`<div class="activity-entry"><span class="activity-symbol">${x.type==='snapshot'?'◇':'✓'}</span><div><strong>${escape(x.title)}</strong><p>${escape(fmtTime(x.date))}</p></div></div>`).join('');$('#historyList').innerHTML=act.map(x=>`<article class="history-entry"><span class="history-dot"></span><div><h4>${escape(x.title)}</h4><p>${escape(x.detail||'')}</p><time datetime="${escape(x.date)}">${escape(fmtTime(x.date))}</time></div></article>`).join('');$('#historyCount').textContent=act.length+' registros';let recoverable=false;try{recoverable=!!localStorage.getItem(PREVIOUS_IMPORT)}catch{}$('#restoreBtn').disabled=!recoverable}
   function updateMotorFilters(){const sel=$('#filterMotor'),old=sel.value;const motors=[...new Set(state.criteria.map(x=>x.motor))].sort((a,b)=>a.localeCompare(b,'pt-BR'));sel.innerHTML='<option value="all">Todos os motores</option>'+motors.map(m=>`<option value="${escape(m)}">${escape(m)}</option>`).join('');sel.value=motors.includes(old)?old:'all'}
   function renderCriteria(){const search=$('#searchCriteria').value.trim().toLocaleLowerCase('pt-BR');const filters={project:$('#filterProject').value,motor:$('#filterMotor').value,priority:$('#filterPriority').value,risk:$('#filterRisk').value,status:$('#filterStatus').value};const matches=state.criteria.filter(r=>Object.entries(filters).every(([k,v])=>v==='all'||String(r[k])===v)&&(!search||[r.title,r.motor,r.category,r.note,r.evidence,r.sha].join(' ').toLocaleLowerCase('pt-BR').includes(search)));$('#criteriaResultCount').textContent=`${matches.length} de ${state.criteria.length} critérios`;$('#criteriaList').innerHTML=matches.map(r=>`<article class="criterion" data-record-project="${escape(r.project)}"><div><div class="criterion-top">${projectTag(r.project)}<span class="tag">${escape(r.motor)}</span><span class="tag">${escape(r.category)}</span>${priorityChip(r.priority)}</div><h3>${escape(r.title)}</h3><p>${escape(r.note||'Sem observações cadastradas.')}</p>${r.evidence?`<p class="criterion-evidence">${href(r.evidence, 'Ver evidência ↗')} ${r.sha?' · SHA '+escape(r.sha.slice(0,9)):''}</p>`:''}<p style="margin-top:6px;font-size:9px">Risco: ${escape(RISK[r.risk]||'Não informado')} · ${r.comments?.length||0} comentário(s)</p></div><div class="criterion-side">${statusChip(r.status)}<button class="item-edit" data-open-record="${escape(r.id)}">Editar / comentar</button></div></article>`).join('')||'<div class="empty">Nenhum critério encontrado. Altere os filtros.</div>'}
@@ -474,6 +520,7 @@
   $('#releaseForm').addEventListener('submit',submitRelease);$('#qaForm').addEventListener('submit',submitQa);$('#checkForm').addEventListener('submit',submitCheck);$('#runForm').addEventListener('submit',submitRun);$('#editForm').addEventListener('submit',submitCriterion);$('#stageForm').addEventListener('submit',submitStage);$('#androidForm').addEventListener('submit',submitAndroid);$('#actionForm').addEventListener('submit',submitAction);
   [$('#newCriteriaBtn'),$('#addCriterionInPage')].forEach(btn=>btn.addEventListener('click',()=>openCriterion('')));$('#newAndroidBtn').addEventListener('click',openAndroid);$('#newActionBtn').addEventListener('click',()=>openAction(''));
   $('#refreshGithub').addEventListener('click',refreshGitHub);
+  $('#generateBlockerActions').addEventListener('click',addBlockerActions);
   $('#exportUnsavedBtn').addEventListener('click',exportJSON);
   $('#reloadLocalBtn').addEventListener('click',reloadExternal);
   if(typeof window.addEventListener==='function')window.addEventListener('storage',event=>{

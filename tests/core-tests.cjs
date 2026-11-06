@@ -11,7 +11,7 @@ function env(options={}){
   const document={querySelector:el,querySelectorAll:()=>[],addEventListener(){},body:{append(){}}};
   const sandbox={fetch: options.fetch,document,URL,Date,Math,Object,JSON,String,Array,Number,structuredClone,localStorage:{getItem:k=>{if(options.storageBroken)throw new Error('quota indisponível');return storage.get(k)},setItem:(k,v)=>{if(options.storageBroken)throw new Error('quota indisponível');storage.set(k,v)},removeItem:k=>storage.delete(k)},console,location:{protocol:'file:'},navigator:{},window:{scrollTo(){},confirm(){return true},addEventListener(type,listener){(listeners[type] ||= []).push(listener)}},clearTimeout,setTimeout,Blob};
   vm.createContext(sandbox);
-  const instrumented=source.replace('  renderAll();\n  if(\'serviceWorker\'', '  globalThis.__test = {get state(){return state},submitCriterion,submitStage,submitAndroid,submitAction,submitQa,submitCheck,submitRun,validateBackup,safeUrl,percent,counts,renderAll,releaseAudit:(...args)=>releaseAudit(...args),normalizeState,submitRelease:(...args)=>submitRelease(...args),importJSON:(...args)=>importJSON(...args),restoreImport:(...args)=>restoreImport(...args),reloadExternal:(...args)=>reloadExternal(...args),githubDrift:(...args)=>githubDrift(...args),refreshGitHub:(...args)=>refreshGitHub(...args)};\n  renderAll();\n  if(\'serviceWorker\'');
+  const instrumented=source.replace('  renderAll();\n  if(\'serviceWorker\'', '  globalThis.__test = {get state(){return state},submitCriterion,submitStage,submitAndroid,submitAction,submitQa,submitCheck,submitRun,validateBackup,safeUrl,percent,counts,renderAll,releaseAudit:(...args)=>releaseAudit(...args),normalizeState,submitRelease:(...args)=>submitRelease(...args),importJSON:(...args)=>importJSON(...args),restoreImport:(...args)=>restoreImport(...args),reloadExternal:(...args)=>reloadExternal(...args),githubDrift:(...args)=>githubDrift(...args),refreshGitHub:(...args)=>refreshGitHub(...args),suggestedActions:(...args)=>suggestedActions(...args),addBlockerActions:(...args)=>addBlockerActions(...args)};\n  renderAll();\n  if(\'serviceWorker\'');
   vm.runInContext(instrumented,sandbox);
   return {t:sandbox.__test,el,storage,listeners};
 }
@@ -329,4 +329,41 @@ test('falha do armazenamento não impede renderizar o registro em memória para 
  assert.equal(t.state.criteria.find(x=>x.id==='bot-ui').status,'comprovado');
  assert.match(el('#saveIndicator').textContent,/não salvo|exporte/i);
  assert.match(el('#historyList').innerHTML,/Critério atualizado/);
+});
+
+
+test('sugestões de bloqueios são locais, pendentes e agrupadas por PR',()=>{
+ const {t}=env();const before=t.state.actions.length;
+ const proposals=t.suggestedActions();
+ assert.ok(proposals.some(a=>a.id==='audit-bot-target'));
+ assert.ok(proposals.some(a=>a.id==='audit-bot-qa'));
+ assert.ok(proposals.some(a=>a.id==='audit-bot-android'));
+ assert.equal(proposals.filter(a=>a.id==='audit-bot-pr-19').length,1);
+ assert.equal(proposals.filter(a=>a.id==='audit-estrategia-pr-6').length,1);
+ assert.ok(proposals.every(a=>a.status==='pendente'&&!a.evidence&&a.plan));
+ assert.equal(t.state.actions.length,before);
+});
+
+test('criar ações da auditoria é idempotente e não aprova gates ou altera ações existentes',()=>{
+ const {t,storage}=env();
+ const qaBefore=structuredClone(t.state.qa),prsBefore=structuredClone(t.state.prs);
+ const oldAction=t.state.actions[0];oldAction.title='Ação personalizada';
+ const count=t.suggestedActions().length;
+ assert.equal(t.addBlockerActions(),count);
+ assert.equal(t.addBlockerActions(),0);
+ assert.equal(t.state.actions[0].title,'Ação personalizada');
+ assert.equal(t.state.actions.filter(x=>x.id==='audit-bot-target').length,1);
+ assert.equal(JSON.stringify(t.state.qa),JSON.stringify(qaBefore));
+ assert.equal(JSON.stringify(t.state.prs),JSON.stringify(prsBefore));
+ assert.equal(t.releaseAudit('bot').complete,false);
+ assert.ok(storage.has('pgbot-homologacao-v1'));
+});
+
+test('sugestão desaparece quando o SHA-alvo tem registro válido, sem marcar os outros como concluídos',()=>{
+ const {t}=env();
+ t.state.releaseTargets.bot={sha:'a'.repeat(40),evidence:'https://example.com/build',note:''};
+ const proposals=t.suggestedActions();
+ assert.ok(!proposals.some(a=>a.id==='audit-bot-target'));
+ assert.ok(proposals.some(a=>a.id==='audit-bot-qa'));
+ assert.ok(proposals.some(a=>a.id==='audit-bot-android'));
 });
