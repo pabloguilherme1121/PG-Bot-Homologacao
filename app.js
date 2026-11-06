@@ -136,7 +136,8 @@
     }
     return v;
   }
-  function load(){try {const raw=localStorage.getItem(STORAGE);if(raw){const parsed=JSON.parse(raw);if(validateBackup(parsed))return normalizeState(parsed)}}catch(e){console.warn('Storage indisponível:',e)}return emptyState()}
+  let knownStorageRaw = null;
+  function load(){try {const raw=localStorage.getItem(STORAGE)??null;knownStorageRaw=raw;if(raw){const parsed=JSON.parse(raw);if(validateBackup(parsed))return normalizeState(parsed)}}catch(e){console.warn('Storage indisponível:',e)}return emptyState()}
   function validGithubRuns(gh){
     if(!('runs' in gh))return true; // backups v1.5
     if(!gh.runs||typeof gh.runs!=='object'||Array.isArray(gh.runs))return false;
@@ -167,7 +168,48 @@
   let toastTimer;
   const priorityOrder={critica:0,alta:1,media:2,baixa:3};
   function notify(msg){const el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2900)}
-  function save(title,detail){state.updatedAt=now();if(title)state.history.unshift({id:uid(),date:now(),title:clampText(title,180),detail:clampText(detail),type:'manual'});state.history=state.history.slice(0,2000);try{localStorage.setItem(STORAGE,JSON.stringify(state));$('#saveIndicator').innerHTML='<span class="save-dot"></span> Salvo localmente'}catch(e){notify('Aviso: o navegador não permitiu salvar. Exporte JSON.')}renderAll()}
+  // Evita perda silenciosa de alterações em múltiplas abas. Não há sincronização em nuvem.
+  function hasStorageConflict(){try{return (localStorage.getItem(STORAGE)??null)!==knownStorageRaw}catch{return false}}
+  function showStorageConflict(){
+    $('#storageConflict').hidden=false;
+    $('#saveIndicator').textContent='Conflito: alterações não salvas';
+  }
+  function save(title,detail){
+    if(hasStorageConflict()){showStorageConflict();notify('Outra aba alterou os registros. Exporte seu rascunho antes de recarregar.');return false}
+    state.updatedAt=now();
+    if(title)state.history.unshift({id:uid(),date:now(),title:clampText(title,180),detail:clampText(detail),type:'manual'});
+    state.history=state.history.slice(0,2000);
+    try{
+      const value=JSON.stringify(state);
+      localStorage.setItem(STORAGE,value);
+      knownStorageRaw=value;
+      $('#saveIndicator').innerHTML='<span class="save-dot"></span> Salvo localmente';
+      $('#storageConflict').hidden=true;
+      renderAll();
+      return true;
+    }catch(e){
+      $('#saveIndicator').textContent='Não salvo: exporte JSON';
+      notify('O navegador não permitiu salvar. Exporte o rascunho JSON antes de sair.');
+      renderAll();
+      return false;
+    }
+  }
+  function reloadExternal(){
+    if(!window.confirm('Carregar os registros mais recentes deste navegador? As alterações não salvas nesta aba serão descartadas. Você pode exportar o rascunho em JSON antes de continuar.'))return false;
+    try{
+      const raw=localStorage.getItem(STORAGE)??null;
+      const fresh=raw?JSON.parse(raw):emptyState();
+      if(raw&&!validateBackup(fresh))throw new Error('Backup local inválido');
+      state=normalizeState(fresh);
+      knownStorageRaw=raw;
+      $('#storageConflict').hidden=true;
+      $('#saveIndicator').innerHTML='<span class="save-dot"></span> Dados atuais carregados';
+      renderAll();
+      notify('Registros mais recentes carregados desta origem.');
+      return true;
+    }catch(e){showStorageConflict();notify('Não foi possível carregar os dados. Exporte o rascunho e confira o armazenamento.');return false}
+  }
+
 
   // O quadro de liberação é conservador: links são declarações manuais, não inspeções automáticas.
   function releaseAudit(project){
@@ -306,7 +348,7 @@
     if(!SHA40.test(sha)){error.textContent='Informe o SHA completo com 40 caracteres hexadecimais.';return}
     if(!safeUrl(evidence)){error.textContent='Informe um link de evidência HTTP/HTTPS válido.';return}
     state.releaseTargets[p]={sha:sha.toLowerCase(),evidence:safeUrl(evidence),note:clampText(note),updated:now()};
-    closeDialog('#releaseDialog');save('SHA-alvo definido: '+PROJECT[p],`SHA ${sha} | ${evidence}. Testes e etapas não foram concluídos automaticamente.`);notify('Versão-alvo registrada; confira os bloqueadores.');
+    closeDialog('#releaseDialog');if(save('SHA-alvo definido: '+PROJECT[p],`SHA ${sha} | ${evidence}. Testes e etapas não foram concluídos automaticamente.`))notify('Versão-alvo registrada; confira os bloqueadores.');
   }
   function releaseReport(p){const a=releaseAudit(p),t=state.releaseTargets[p];
     return [`PG BOT | RELATÓRIO DE HOMOLOGAÇÃO`, `Projeto: ${PROJECT[p]}`,`Gerado: ${new Date().toLocaleString('pt-BR')}`,`SHA-alvo: ${t.sha||'não definido'}`,`Evidência build: ${t.evidence||'não registrada'}`,`HEAD da main pública (última consulta): ${state.github.projects[p]?.sha||'indisponível'}`,`Consultada: ${state.github.projects[p]?.observedAt||'sem data'}`,`Comparação: ${githubDrift(p).label}`,
@@ -369,9 +411,9 @@
   function closeDialog(sel){$(sel).close()}
   function setValue(id,v){$('#'+id).value=v??''}
   function openCriterion(id){const r=state.criteria.find(x=>x.id===id);$('#editForm').reset();$('#editError').textContent='';setValue('editId',r?.id||'');setValue('editTitle',r?.title||'');setValue('editProject',r?.project||'bot');setValue('editMotor',r?.motor||'PG Bot núcleo');setValue('editCategory',r?.category||'Integração');setValue('editStatus',r?.status||'pendente');setValue('editPriority',r?.priority||'media');setValue('editRisk',r?.risk||'integracao');setValue('editEvidence',r?.evidence||'');setValue('editSha',r?.sha||'');setValue('editNote',r?.note||'');$('#editDialogTitle').textContent=r?'Editar critério':'Novo critério';$('#commentBlock').style.display=r?'block':'none';$('#commentsList').innerHTML=(r?.comments||[]).map(c=>`<div class="comment">${escape(c.text)}<small>${escape(fmtTime(c.date))}</small></div>`).join('')||'<p class="hint">Nenhum comentário registrado.</p>';openDialog('#editDialog')}
-  function submitCriterion(ev){ev.preventDefault();const id=$('#editId').value;const record={id:id||uid(),title:$('#editTitle').value.trim(),project:$('#editProject').value,motor:$('#editMotor').value.trim(),category:$('#editCategory').value,status:$('#editStatus').value,priority:$('#editPriority').value,risk:$('#editRisk').value,evidence:$('#editEvidence').value.trim(),sha:$('#editSha').value.trim(),note:$('#editNote').value.trim()};const error=$('#editError');if(!record.title||!record.motor){error.textContent='Informe nome e motor.';return}if(record.evidence&&!safeUrl(record.evidence)){error.textContent='Informe um link de evidência válido (HTTP/HTTPS).';return}if(record.status==='comprovado'&&!safeUrl(record.evidence)){error.textContent='Informe um link de evidência válido antes de marcar Comprovado.';return}const comment=$('#newComment').value.trim();const current=state.criteria.find(x=>x.id===id);record.comments=[...(current?.comments||[])];if(comment)record.comments.push({date:now(),text:clampText(comment,3000)});record.source=current?.source||'Registro manual';if(current)Object.assign(current,record);else state.criteria.push(record);closeDialog('#editDialog');save((current?'Critério atualizado: ':'Novo critério: ')+record.title,STATUS[record.status]+' | '+PROJECT[record.project]+(comment?' | Comentário: '+comment:'')+(record.evidence?' | '+record.evidence:''));notify('Alteração salva no navegador')}
+  function submitCriterion(ev){ev.preventDefault();const id=$('#editId').value;const record={id:id||uid(),title:$('#editTitle').value.trim(),project:$('#editProject').value,motor:$('#editMotor').value.trim(),category:$('#editCategory').value,status:$('#editStatus').value,priority:$('#editPriority').value,risk:$('#editRisk').value,evidence:$('#editEvidence').value.trim(),sha:$('#editSha').value.trim(),note:$('#editNote').value.trim()};const error=$('#editError');if(!record.title||!record.motor){error.textContent='Informe nome e motor.';return}if(record.evidence&&!safeUrl(record.evidence)){error.textContent='Informe um link de evidência válido (HTTP/HTTPS).';return}if(record.status==='comprovado'&&!safeUrl(record.evidence)){error.textContent='Informe um link de evidência válido antes de marcar Comprovado.';return}const comment=$('#newComment').value.trim();const current=state.criteria.find(x=>x.id===id);record.comments=[...(current?.comments||[])];if(comment)record.comments.push({date:now(),text:clampText(comment,3000)});record.source=current?.source||'Registro manual';if(current)Object.assign(current,record);else state.criteria.push(record);closeDialog('#editDialog');if(save((current?'Critério atualizado: ':'Novo critério: ')+record.title,STATUS[record.status]+' | '+PROJECT[record.project]+(comment?' | Comentário: '+comment:'')+(record.evidence?' | '+record.evidence:'')))notify('Alteração salva no navegador')}
   function openStage(prid,name){const pr=state.prs.find(x=>x.id===prid);if(!pr||!stageName[name])return;const item=pr.stages[name];$('#stageForm').reset();$('#stageError').textContent='';$('#stageTitle').textContent=stageName[name]+' · PR #'+pr.number;setValue('stagePrId',prid);setValue('stageName',name);setValue('stageValue',item.status);setValue('stageEvidence',item.evidence);setValue('stageSha',item.sha||pr.sha);setValue('stageNote',item.note);openDialog('#stageDialog')}
-  function submitStage(ev){ev.preventDefault();const pr=state.prs.find(x=>x.id===$('#stagePrId').value),name=$('#stageName').value;if(!pr)return;const st={status:$('#stageValue').value,evidence:$('#stageEvidence').value.trim(),sha:$('#stageSha').value.trim(),note:$('#stageNote').value.trim()},error=$('#stageError');if(st.evidence&&!safeUrl(st.evidence)){error.textContent='O link de evidência deve começar com HTTP/HTTPS.';return}if(st.status==='comprovado'&&(!safeUrl(st.evidence)||!SHA40.test(st.sha))){error.textContent='Para Comprovado, informe URL de evidência e SHA completo de 40 caracteres.';return}pr.stages[name]=st;closeDialog('#stageDialog');save('PR #'+pr.number+' · '+stageName[name]+' atualizado',STATUS[st.status]+' | SHA '+st.sha+' | '+st.evidence+' | '+st.note);notify('Etapa registrada; outras etapas não foram alteradas.')}
+  function submitStage(ev){ev.preventDefault();const pr=state.prs.find(x=>x.id===$('#stagePrId').value),name=$('#stageName').value;if(!pr)return;const st={status:$('#stageValue').value,evidence:$('#stageEvidence').value.trim(),sha:$('#stageSha').value.trim(),note:$('#stageNote').value.trim()},error=$('#stageError');if(st.evidence&&!safeUrl(st.evidence)){error.textContent='O link de evidência deve começar com HTTP/HTTPS.';return}if(st.status==='comprovado'&&(!safeUrl(st.evidence)||!SHA40.test(st.sha))){error.textContent='Para Comprovado, informe URL de evidência e SHA completo de 40 caracteres.';return}pr.stages[name]=st;closeDialog('#stageDialog');if(save('PR #'+pr.number+' · '+stageName[name]+' atualizado',STATUS[st.status]+' | SHA '+st.sha+' | '+st.evidence+' | '+st.note))notify('Etapa registrada; outras etapas não foram alteradas.')}
   function openQa(id){const q=state.qa.find(x=>x.id===id);if(!q)return;
     $('#qaForm').reset();$('#qaError').textContent='';
     $('#qaTitle').textContent=PROJECT[q.project]+' · '+q.browser+' '+q.viewport+' px';
@@ -381,7 +423,7 @@
     const status=$('#qaEditStatus').value,evidence=$('#qaEvidence').value.trim(),sha=$('#qaSha').value.trim(),note=$('#qaNote').value.trim();
     const err=$('#qaError');if(evidence&&!safeUrl(evidence)){err.textContent='Informe um URL HTTP/HTTPS válido.';return}
     if(status==='comprovado'&&(!safeUrl(evidence)||!SHA40.test(sha))){err.textContent='Comprovado exige evidência e SHA completo de 40 caracteres.';return}
-    Object.assign(q,{status,evidence,sha,note,updated:now()});closeDialog('#qaDialog');save(`Playwright: ${PROJECT[q.project]} · ${q.browser} ${q.viewport}px`,`${STATUS[status]} | SHA ${sha} | ${evidence} | ${note}`);notify('Resultado registrado neste navegador.');
+    Object.assign(q,{status,evidence,sha,note,updated:now()});closeDialog('#qaDialog');if(save(`Playwright: ${PROJECT[q.project]} · ${q.browser} ${q.viewport}px`,`${STATUS[status]} | SHA ${sha} | ${evidence} | ${note}`))notify('Resultado registrado neste navegador.');
   }
   function openCheck(prId,key){const pr=state.prs.find(x=>x.id===prId);const c=pr?.checklist?.find(x=>x.key===key);if(!c)return;
     $('#checkForm').reset();$('#checkError').textContent='';$('#checkTitle').textContent=`PR #${pr.number} · ${c.title}`;
@@ -391,7 +433,7 @@
     const status=$('#checkStatus').value,evidence=$('#checkEvidence').value.trim(),sha=$('#checkSha').value.trim(),note=$('#checkNote').value.trim();const err=$('#checkError');
     if(evidence&&!safeUrl(evidence)){err.textContent='O URL da evidência precisa usar HTTP/HTTPS.';return}
     if(status==='comprovado'&&(!safeUrl(evidence)||!SHA40.test(sha))){err.textContent='Comprovado exige evidência e SHA completo de 40 caracteres.';return}
-    Object.assign(c,{status,evidence,sha,note});closeDialog('#checkDialog');save(`Checklist PR #${pr.number}: ${c.title}`,`${STATUS[status]} | SHA ${sha} | ${evidence} | ${note}`);notify('Checklist atualizado sem alterar etapas da PR.');
+    Object.assign(c,{status,evidence,sha,note});closeDialog('#checkDialog');if(save(`Checklist PR #${pr.number}: ${c.title}`,`${STATUS[status]} | SHA ${sha} | ${evidence} | ${note}`))notify('Checklist atualizado sem alterar etapas da PR.');
   }
   function openRun(prId){const pr=state.prs.find(x=>x.id===prId);if(!pr)return;
     $('#runForm').reset();$('#runError').textContent='';$('#runTitle').textContent=`Adicionar run · PR #${pr.number}`;
@@ -402,26 +444,28 @@
     if(!name||!safeUrl(url)||sha.length<7){err.textContent='Informe nome, URL HTTP/HTTPS e SHA de pelo menos 7 caracteres.';return}
     if((pr.extraRuns||[]).some(r=>r.url===safeUrl(url))){err.textContent='Este link já foi registrado para a PR.';return}
     pr.extraRuns.push({id:uid(),name:clampText(name,100),url:safeUrl(url),sha:clampText(sha,80),note:clampText(note,1500),date:now()});
-    closeDialog('#runDialog');save(`Run adicionado à PR #${pr.number}`,`${name} | SHA ${sha} | ${url} | ${note} | Resultado não verificado automaticamente`);notify('Link registrado; não implica aprovação ou deploy.');
+    closeDialog('#runDialog');if(save(`Run adicionado à PR #${pr.number}`,`${name} | SHA ${sha} | ${url} | ${note} | Resultado não verificado automaticamente`))notify('Link registrado; não implica aprovação ou deploy.');
   }
   function renderScenarioFields(){const holder=$('#androidScenarioFields');holder.innerHTML=SCENARIOS.map((name,i)=>`<label>${escape(name)}<select data-scenario="${escape(name)}" id="androidScenario${i}"><option value="nao_testado">Não testado</option><option value="passou">Passou</option><option value="falhou">Falhou</option></select></label>`).join('')}
   function openAndroid(){renderScenarioFields();$('#androidForm').reset();$('#androidError').textContent='';setValue('androidDate',new Date().toLocaleDateString('en-CA'));openDialog('#androidDialog')}
-  function submitAndroid(ev){ev.preventDefault();const data={id:uid(),project:$('#androidProject').value,model:$('#androidModel').value.trim(),os:$('#androidOs').value.trim(),browser:$('#androidBrowser').value.trim(),date:$('#androidDate').value,sha:$('#androidSha').value.trim(),evidence:$('#androidEvidence').value.trim(),note:$('#androidNote').value.trim(),scenarios:Object.fromEntries($$('[data-scenario]', $('#androidScenarioFields')).map(el=>[el.dataset.scenario,el.value]))};const err=$('#androidError');if(!data.model||!data.os||!data.browser||!data.date){err.textContent='Informe aparelho, Android, navegador e data.';return}if(!safeUrl(data.evidence)){err.textContent='Inclua uma evidência (URL HTTP/HTTPS) para registrar o teste físico.';return}if(data.sha&&!SHA40.test(data.sha)){err.textContent='SHA do Android deve ter 40 caracteres hexadecimais.';return}state.android.unshift(data);closeDialog('#androidDialog');const completed=SCENARIOS.every(k=>data.scenarios[k]==='passou');save('Validação física: '+data.model+' · '+PROJECT[data.project],completed&&SHA40.test(data.sha)?'Todos os cenários marcados como passou, com SHA e evidência: '+data.evidence:'Registro parcial ou sem SHA; homologação permanece pendente. '+data.evidence);notify('Validação registrada')}
+  function submitAndroid(ev){ev.preventDefault();const data={id:uid(),project:$('#androidProject').value,model:$('#androidModel').value.trim(),os:$('#androidOs').value.trim(),browser:$('#androidBrowser').value.trim(),date:$('#androidDate').value,sha:$('#androidSha').value.trim(),evidence:$('#androidEvidence').value.trim(),note:$('#androidNote').value.trim(),scenarios:Object.fromEntries($$('[data-scenario]', $('#androidScenarioFields')).map(el=>[el.dataset.scenario,el.value]))};const err=$('#androidError');if(!data.model||!data.os||!data.browser||!data.date){err.textContent='Informe aparelho, Android, navegador e data.';return}if(!safeUrl(data.evidence)){err.textContent='Inclua uma evidência (URL HTTP/HTTPS) para registrar o teste físico.';return}if(data.sha&&!SHA40.test(data.sha)){err.textContent='SHA do Android deve ter 40 caracteres hexadecimais.';return}state.android.unshift(data);closeDialog('#androidDialog');const completed=SCENARIOS.every(k=>data.scenarios[k]==='passou');if(save('Validação física: '+data.model+' · '+PROJECT[data.project],completed&&SHA40.test(data.sha)?'Todos os cenários marcados como passou, com SHA e evidência: '+data.evidence:'Registro parcial ou sem SHA; homologação permanece pendente. '+data.evidence))notify('Validação registrada')}
   function openAction(id){const a=state.actions.find(x=>x.id===id);$('#actionForm').reset();$('#actionError').textContent='';$('#actionDialogTitle').textContent=a?'Editar ação':'Nova ação';[['actionId',a?.id||''],['actionTitle',a?.title||''],['actionProject',a?.project||'bot'],['actionPriority',a?.priority||'alta'],['actionStatus',a?.status||'pendente'],['actionOwner',a?.owner||''],['actionEvidence',a?.evidence||''],['actionPlan',a?.plan||'']].forEach(([id,v])=>setValue(id,v));openDialog('#actionDialog')}
-  function submitAction(ev){ev.preventDefault();const id=$('#actionId').value;const a={id:id||uid(),title:$('#actionTitle').value.trim(),project:$('#actionProject').value,priority:$('#actionPriority').value,status:$('#actionStatus').value,owner:$('#actionOwner').value.trim(),evidence:$('#actionEvidence').value.trim(),plan:$('#actionPlan').value.trim()};const error=$('#actionError');if(!a.title){error.textContent='Informe o título da ação.';return}if(a.evidence&&!safeUrl(a.evidence)){error.textContent='Informe um URL HTTP/HTTPS válido.';return}if(a.status==='comprovado'&&!safeUrl(a.evidence)){error.textContent='Informe URL de evidência antes de concluir a ação.';return}const current=state.actions.find(x=>x.id===id);if(current)Object.assign(current,a);else state.actions.push(a);closeDialog('#actionDialog');save('Ação '+(current?'atualizada: ':'adicionada: ')+a.title,PROJECT[a.project]+' | '+STATUS[a.status]+' | '+a.plan);notify('Ação salva no navegador')}
+  function submitAction(ev){ev.preventDefault();const id=$('#actionId').value;const a={id:id||uid(),title:$('#actionTitle').value.trim(),project:$('#actionProject').value,priority:$('#actionPriority').value,status:$('#actionStatus').value,owner:$('#actionOwner').value.trim(),evidence:$('#actionEvidence').value.trim(),plan:$('#actionPlan').value.trim()};const error=$('#actionError');if(!a.title){error.textContent='Informe o título da ação.';return}if(a.evidence&&!safeUrl(a.evidence)){error.textContent='Informe um URL HTTP/HTTPS válido.';return}if(a.status==='comprovado'&&!safeUrl(a.evidence)){error.textContent='Informe URL de evidência antes de concluir a ação.';return}const current=state.actions.find(x=>x.id===id);if(current)Object.assign(current,a);else state.actions.push(a);closeDialog('#actionDialog');if(save('Ação '+(current?'atualizada: ':'adicionada: ')+a.title,PROJECT[a.project]+' | '+STATUS[a.status]+' | '+a.plan))notify('Ação salva no navegador')}
   function exportJSON(){const data=JSON.stringify(state,null,2);const blob=new Blob([data],{type:'application/json;charset=utf-8'});const u=URL.createObjectURL(blob);const link=document.createElement('a');link.href=u;link.download='pg-bot-homologacao-'+new Date().toLocaleDateString('en-CA')+'.json';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(u),500);notify('Backup gerado')}
   async function importJSON(file){if(!file)return;if(file.size>2*1024*1024){notify('Backup maior que 2 MB. Importação recusada.');return}try{
     const loaded=JSON.parse(await file.text());if(!validateBackup(loaded))throw new Error('Formato ou versão incompatível');
+    if(hasStorageConflict()){showStorageConflict();notify('Conflito de abas: exporte seu rascunho e recarregue antes de importar.');return}
     if(!window.confirm('Importar este backup? Isso substituirá os dados locais atuais. Uma cópia dos dados anteriores será mantida para recuperação.'))return;
     try{localStorage.setItem(PREVIOUS_IMPORT,JSON.stringify(state))}catch{throw new Error('Não foi possível salvar a recuperação anterior. Importação cancelada.')}
-    state=normalizeState(loaded);save('Backup JSON importado','Dados locais substituídos; versão anterior disponível na seção Histórico.');notify('Backup importado. A versão anterior pode ser recuperada em Histórico.');
+    state=normalizeState(loaded);if(save('Backup JSON importado','Dados locais substituídos; versão anterior disponível na seção Histórico.'))notify('Backup importado. A versão anterior pode ser recuperada em Histórico.');
   }catch(err){notify('Não foi possível importar: '+err.message)}finally{$('#importInput').value=''}}
   function restoreImport(){let old;
     try{const raw=localStorage.getItem(PREVIOUS_IMPORT);if(!raw){notify('Nenhuma versão anterior disponível.');return}old=JSON.parse(raw);if(!validateBackup(old))throw new Error('Cópia de recuperação inválida')}
     catch{notify('A cópia de recuperação não está disponível ou é inválida.');return}
+    if(hasStorageConflict()){showStorageConflict();notify('Conflito de abas: carregue o estado mais recente antes de restaurar.');return}
     if(!window.confirm('Restaurar os dados anteriores à última importação? O estado atual será substituído.'))return;
     try{localStorage.setItem(PREVIOUS_IMPORT,JSON.stringify(state))}catch{notify('Não foi possível garantir retorno ao estado atual. Restauração cancelada.');return}
-    state=normalizeState(old);save('Backup anterior restaurado','Restauração manual dos dados que existiam antes da última importação.');notify('Versão anterior restaurada.');
+    state=normalizeState(old);if(save('Backup anterior restaurado','Restauração manual dos dados que existiam antes da última importação.'))notify('Versão anterior restaurada.');
   }
 
   // Delegação: nenhum evento altera GitHub, executa workflow ou publica site.
@@ -430,6 +474,11 @@
   $('#releaseForm').addEventListener('submit',submitRelease);$('#qaForm').addEventListener('submit',submitQa);$('#checkForm').addEventListener('submit',submitCheck);$('#runForm').addEventListener('submit',submitRun);$('#editForm').addEventListener('submit',submitCriterion);$('#stageForm').addEventListener('submit',submitStage);$('#androidForm').addEventListener('submit',submitAndroid);$('#actionForm').addEventListener('submit',submitAction);
   [$('#newCriteriaBtn'),$('#addCriterionInPage')].forEach(btn=>btn.addEventListener('click',()=>openCriterion('')));$('#newAndroidBtn').addEventListener('click',openAndroid);$('#newActionBtn').addEventListener('click',()=>openAction(''));
   $('#refreshGithub').addEventListener('click',refreshGitHub);
+  $('#exportUnsavedBtn').addEventListener('click',exportJSON);
+  $('#reloadLocalBtn').addEventListener('click',reloadExternal);
+  if(typeof window.addEventListener==='function')window.addEventListener('storage',event=>{
+    if(event.key===STORAGE&&event.newValue!==knownStorageRaw)showStorageConflict();
+  });
   [$('#exportBtn'),$('#exportFromHistory')].forEach(b=>b.addEventListener('click',exportJSON));$('#restoreBtn').addEventListener('click',restoreImport);$('#importBtn').addEventListener('click',()=>$('#importInput').click());$('#importInput').addEventListener('change',e=>importJSON(e.target.files[0]));
   ['#qaProject','#qaBrowser','#qaStatus'].forEach(sel=>$(sel).addEventListener('input',renderQa));
   ['#searchCriteria','#filterProject','#filterMotor','#filterPriority','#filterRisk','#filterStatus'].forEach(sel=>$(sel).addEventListener('input',renderCriteria));$('#resetFilters').addEventListener('click',()=>{setValue('searchCriteria','');['filterProject','filterMotor','filterPriority','filterRisk','filterStatus'].forEach(x=>setValue(x,'all'));renderCriteria()});

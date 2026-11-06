@@ -1,5 +1,5 @@
 /* Interface offline: rede primeiro para não manter versões antigas após uma atualização. */
-const CACHE='pgbot-console-v1-6-pwa';
+const CACHE='pgbot-console-v1-7';
 const SHELL=['./','./index.html','./styles.css','./app.js','./assets/favicon.svg','./manifest.json'];
 self.addEventListener('install', event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()));

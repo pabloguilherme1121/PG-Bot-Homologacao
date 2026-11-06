@@ -42,7 +42,7 @@
       <div class="sidebar-info-icon">i</div>
       <div><strong>Dados neste navegador</strong><p>Sem acesso de escrita aos repositórios. Exporte um backup regularmente.</p></div>
     </div>
-    <div class="sidebar-version">PG BOT CONSOLE <span>v1.6</span></div>
+    <div class="sidebar-version">PG BOT CONSOLE <span>v1.7</span></div>
   </aside>
   <div class="menu-scrim" id="menuScrim"></div>
   <main class="main" id="mainContent" tabindex="-1">
@@ -50,6 +50,10 @@
       <div class="top-left"><button class="icon-button hamburger" id="openMenu" aria-label="Abrir menu">☰</button><div class="breadcrumb">Workspace <span>/</span> <strong id="breadcrumbCurrent">Visão geral</strong></div></div>
       <div class="top-actions"><span class="saved-indicator" id="saveIndicator"><span class="save-dot"></span> Salvo localmente</span><button class="top-ghost" id="importBtn" title="Importar backup JSON">Importar</button><button class="btn btn-soft" id="exportBtn"><span>⇩</span> Exportar JSON</button><input type="file" id="importInput" accept="application/json,.json" hidden /></div>
     </header>
+    <div class="storage-conflict" id="storageConflict" role="alert" hidden>
+      <div><strong>Há alterações em outra aba.</strong><p>Este rascunho não foi salvo para evitar que seus registros sejam sobrescritos. Exporte uma cópia antes de carregar a versão mais recente. Esta proteção funciona somente neste navegador.</p></div>
+      <div class="conflict-actions"><button type="button" id="exportUnsavedBtn" class="btn btn-soft">Exportar meu rascunho</button><button type="button" id="reloadLocalBtn" class="btn btn-primary">Carregar versão atual</button></div>
+    </div>
     <div class="content">
       <section class="page active" data-section="overview" aria-labelledby="overviewTitle">
         <div class="eyebrow"><span class="eyebrow-line"></span> CENTRAL DE OPERAÇÕES <span class="eyebrow-date" id="snapshotDate">SNAPSHOT · 06 NOV 2026</span></div>

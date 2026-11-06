@@ -6,13 +6,14 @@ const source=fs.readFileSync(__dirname+'/../app.js','utf8');
 function env(options={}){
   const elements=new Map();
   const el=selector=>{if(!elements.has(selector))elements.set(selector,{value:selector.startsWith('#filter')?'all':'',textContent:'',innerHTML:'',dataset:{},style:{},classList:{add(){},remove(){},toggle(){}},addEventListener(){},querySelectorAll(){return []},focus(){},close(){},showModal(){},reset(){},setAttribute(){},removeAttribute(){},getAttribute(){return ''}});return elements.get(selector)};
-  const storage=new Map();
+  const storage=options.storage||new Map();
+  const listeners={};
   const document={querySelector:el,querySelectorAll:()=>[],addEventListener(){},body:{append(){}}};
-  const sandbox={fetch: options.fetch,document,URL,Date,Math,Object,JSON,String,Array,Number,structuredClone,localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},console,location:{protocol:'file:'},navigator:{},window:{scrollTo(){},confirm(){return true}},clearTimeout,setTimeout,Blob};
+  const sandbox={fetch: options.fetch,document,URL,Date,Math,Object,JSON,String,Array,Number,structuredClone,localStorage:{getItem:k=>{if(options.storageBroken)throw new Error('quota indisponível');return storage.get(k)},setItem:(k,v)=>{if(options.storageBroken)throw new Error('quota indisponível');storage.set(k,v)},removeItem:k=>storage.delete(k)},console,location:{protocol:'file:'},navigator:{},window:{scrollTo(){},confirm(){return true},addEventListener(type,listener){(listeners[type] ||= []).push(listener)}},clearTimeout,setTimeout,Blob};
   vm.createContext(sandbox);
-  const instrumented=source.replace('  renderAll();\n  if(\'serviceWorker\'', '  globalThis.__test = {get state(){return state},submitCriterion,submitStage,submitAndroid,submitAction,submitQa,submitCheck,submitRun,validateBackup,safeUrl,percent,counts,renderAll,releaseAudit:(...args)=>releaseAudit(...args),normalizeState,submitRelease:(...args)=>submitRelease(...args),importJSON:(...args)=>importJSON(...args),restoreImport:(...args)=>restoreImport(...args),githubDrift:(...args)=>githubDrift(...args),refreshGitHub:(...args)=>refreshGitHub(...args)};\n  renderAll();\n  if(\'serviceWorker\'');
+  const instrumented=source.replace('  renderAll();\n  if(\'serviceWorker\'', '  globalThis.__test = {get state(){return state},submitCriterion,submitStage,submitAndroid,submitAction,submitQa,submitCheck,submitRun,validateBackup,safeUrl,percent,counts,renderAll,releaseAudit:(...args)=>releaseAudit(...args),normalizeState,submitRelease:(...args)=>submitRelease(...args),importJSON:(...args)=>importJSON(...args),restoreImport:(...args)=>restoreImport(...args),reloadExternal:(...args)=>reloadExternal(...args),githubDrift:(...args)=>githubDrift(...args),refreshGitHub:(...args)=>refreshGitHub(...args)};\n  renderAll();\n  if(\'serviceWorker\'');
   vm.runInContext(instrumented,sandbox);
-  return {t:sandbox.__test,el,storage};
+  return {t:sandbox.__test,el,storage,listeners};
 }
 function setCriteriaForm(el,opts={}){
  const values={editId:'bot-ui',editTitle:'Painel isolado: preservar contratos dos consumidores',editProject:'bot',editMotor:'Painel de integrações',editCategory:'Legado',editStatus:'comprovado',editPriority:'alta',editRisk:'regressao',editEvidence:'',editSha:'abc12345',editNote:'Teste registrado',newComment:''};Object.assign(values,opts);for(const [k,v] of Object.entries(values))el('#'+k).value=v;
@@ -262,4 +263,70 @@ test('run recente em SHA diferente não é sinalizado como pertencente à versã
  t.renderAll();
  assert.match(el('#githubRuns').innerHTML,/SHA diferente da versão-alvo/);
  assert.equal(t.releaseAudit('bot').complete,false);
+});
+
+
+test('duas abas não sobrescrevem silenciosamente o mesmo armazenamento',()=>{
+ const storage=new Map();
+ const a=env({storage}), b=env({storage});
+ setCriteriaForm(a.el,{editEvidence:'https://github.com/exemplo/a'});
+ a.t.submitCriterion({preventDefault(){}});
+ const salvo=storage.get('pgbot-homologacao-v1');
+ setCriteriaForm(b.el,{editEvidence:'https://github.com/exemplo/b'});
+ b.t.submitCriterion({preventDefault(){}});
+ assert.equal(storage.get('pgbot-homologacao-v1'),salvo,'segunda aba sobrescreveu o registro da primeira');
+ assert.equal(b.t.state.criteria.find(c=>c.id==='bot-ui').evidence,'https://github.com/exemplo/b','rascunho da segunda aba não foi preservado em memória');
+ assert.match(b.el('#saveIndicator').textContent,/Conflito|salvo|não salvas/i);
+ assert.equal(b.el('#storageConflict').hidden,false);
+ assert.doesNotMatch(b.el('#toast').textContent,/alteração salva no navegador/i);
+});
+
+test('ao carregar dados atualizados de outra aba, preserva a versão mais recente',()=>{
+ const storage=new Map();
+ const a=env({storage}), b=env({storage});
+ setCriteriaForm(a.el,{editEvidence:'https://github.com/exemplo/a'});
+ a.t.submitCriterion({preventDefault(){}});
+ setCriteriaForm(b.el,{editEvidence:'https://github.com/exemplo/b'});
+ b.t.submitCriterion({preventDefault(){}});
+ b.t.reloadExternal();
+ assert.equal(b.t.state.criteria.find(c=>c.id==='bot-ui').evidence,'https://github.com/exemplo/a');
+ assert.equal(b.el('#storageConflict').hidden,true);
+ setCriteriaForm(b.el,{editEvidence:'https://github.com/exemplo/c'});
+ b.t.submitCriterion({preventDefault(){}});
+ assert.equal(JSON.parse(storage.get('pgbot-homologacao-v1')).criteria.find(c=>c.id==='bot-ui').evidence,'https://github.com/exemplo/c');
+});
+
+test('evento storage mostra o aviso sem substituir estado manual',()=>{
+ const storage=new Map();
+ const a=env({storage}), b=env({storage});
+ setCriteriaForm(a.el,{editEvidence:'https://github.com/exemplo/a'});
+ a.t.submitCriterion({preventDefault(){}});
+ for(const fn of b.listeners.storage||[])fn({key:'pgbot-homologacao-v1',newValue:storage.get('pgbot-homologacao-v1')});
+ assert.equal(b.el('#storageConflict').hidden,false);
+ assert.equal(b.t.state.criteria.find(c=>c.id==='bot-ui').status,'pendente');
+});
+
+
+test('backup importado em aba desatualizada não substitui versão externa nem ponto de retorno',async()=>{
+ const storage=new Map();
+ const a=env({storage}), b=env({storage});
+ setCriteriaForm(a.el,{editEvidence:'https://github.com/exemplo/novo'});
+ a.t.submitCriterion({preventDefault(){}});
+ const current=storage.get('pgbot-homologacao-v1');
+ const backup=structuredClone(b.t.state);
+ backup.criteria.push({...structuredClone(backup.criteria[1]),id:'novo-backup',title:'Não deve entrar'});
+ await b.t.importJSON({size:1024,text:async()=>JSON.stringify(backup)});
+ assert.equal(storage.get('pgbot-homologacao-v1'),current);
+ assert.equal(storage.has('pgbot-homologacao-v1-anterior-importacao'),false);
+ assert.equal(b.el('#storageConflict').hidden,false);
+});
+
+
+test('falha do armazenamento não impede renderizar o registro em memória para exportação',()=>{
+ const {t,el}=env({storageBroken:true});
+ setCriteriaForm(el,{editEvidence:'https://github.com/example/novo'});
+ t.submitCriterion({preventDefault(){}});
+ assert.equal(t.state.criteria.find(x=>x.id==='bot-ui').status,'comprovado');
+ assert.match(el('#saveIndicator').textContent,/não salvo|exporte/i);
+ assert.match(el('#historyList').innerHTML,/Critério atualizado/);
 });
