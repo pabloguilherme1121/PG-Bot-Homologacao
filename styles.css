@@ -163,3 +163,129 @@
 
 /* Firefox/WebKit: evitar que a barra fixa cubra o botão de atualização após scrollIntoView. */
 #refreshGithub{scroll-margin-top:86px}
+
+
+/* Ajustes de leitura e interação da central de homologação, sem mudar os gates. */
+:root {
+  --bg: #0d1220;
+  --side: #111729;
+  --panel: #192035;
+  --panel-2: #1c253d;
+  --line: #38445d;
+  --line-bright: #50607c;
+  --sub: #bdc9dd;
+  --dim: #a0aec6;
+  --accent: #c2b4ff;
+  --accent-dark: #8c7ae5;
+  --mint: #8bdfc9;
+  --amber: #f4c891;
+  --rose: #f6a3b8;
+  --blue: #a6c8ff;
+}
+body {
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+.content { padding-bottom: 100px; }
+.brand-wordmark small { font-size: 10px; letter-spacing: 1.1px; color: var(--sub); }
+.nav-caption { color: #acb7d3; font-size: 11px; letter-spacing: 1.2px; }
+.nav-item {
+  min-height: 46px;
+  font-size: 14px;
+  color: #c5d0e7;
+  border-radius: 11px;
+}
+.nav-item.active { background: #322b50; color: #eeeaff; }
+.workspace-pill { font-size: 13px; line-height: 1.45; }
+.breadcrumb { font-size: 13px; color: #b2c0d6; }
+.saved-indicator { font-size: 12px; color: var(--sub); }
+.lead, .section-head p { font-size: 15px; color: #b5c2d8; line-height: 1.7; }
+.intro h1, .section-head h1 { line-height: 1.15; }
+.notice { border-radius: 15px; padding: 18px 20px; }
+.notice strong { font-size: 14px; }
+.notice p { font-size: 13px; color: #c1c4de; }
+.notice > a { font-size: 13px; }
+.btn {
+  min-height: 46px;
+  font-size: 13px;
+  padding-inline: 17px;
+  border-radius: 10px;
+}
+.icon-button { min-height: 46px; min-width: 46px; width: 46px; height: 46px; }
+.metric { padding: 21px; border-radius: 16px; }
+.metric-label { font-size: 13px; color: #cad4e8; }
+.metric-value { font-size: clamp(30px,3vw,39px); }
+.metric-sub { font-size: 12px; color: #b0bdd4; }
+.project-card { border-radius: 16px; padding: 23px; }
+.project-head h3 { font-size: 18px; }
+.project-head p { font-size: 12px; color: var(--sub); }
+.project-state { font-size: 11px; }
+.readiness-row span, .status-mini, .project-foot a { font-size: 12px; }
+.panel { border-radius: 16px; }
+.panel-heading h3 { font-size: 17px; }
+.panel-heading p { font-size: 12px; color: var(--sub); }
+.queue-copy strong { font-size: 13px; }
+.queue-copy small { font-size: 12px; color: #afbdd5; }
+.activity-entry strong { font-size: 13px; }
+.activity-entry p { font-size: 12px; color: var(--sub); }
+.filter-search { min-height: 48px; height: auto; }
+.filter-search input { font-size: 14px; min-height: 44px; }
+.filters label, .form-row label, .comments-block label { font-size: 13px; color: #c9d3e6; }
+.filters select {
+  min-height: 46px;
+  height: auto;
+  font-size: 13px;
+  color: #e3ebf9;
+}
+.form-row input, .form-row select, .form-row textarea, .comments-block textarea {
+  min-height: 46px;
+  font-size: 14px;
+}
+.filter-result, .filter-note { font-size: 12px; color: var(--sub); }
+.criterion { border-radius: 14px; padding: 18px; }
+.criterion h3 { font-size: 15px; line-height: 1.5; }
+.criterion p { font-size: 13px; color: #b5c2d8; }
+.criterion-evidence { font-size: 12px !important; }
+.state-badge { font-size: 11px; padding: 7px 11px; }
+.tag { font-size: 11px; line-height: 1.4; }
+.item-edit { min-height: 44px; font-size: 12px; padding: 10px 13px; }
+.pr-stage small, .pr-stage button, .pr-runs a { font-size: 12px; }
+.pr-stage button { min-height: 44px; }
+.pr-head p, .pr-footer, .android-summary p, .action-desc { font-size: 13px; line-height: 1.6; }
+.android-entry p, .history-entry p, .evidence-entry p { font-size: 12px; }
+:where(button, a, input, select, textarea):focus-visible {
+  outline: 3px solid #e2c7ff;
+  outline-offset: 3px;
+}
+@media (max-width: 750px) {
+  .content { padding: 28px 17px 104px; }
+  .intro h1 { font-size: clamp(30px, 7.5vw, 38px); }
+  .notice p { font-size: 12px; }
+  .metric { padding: 18px; }
+  .metric-label { font-size: 12px; }
+  .metric-sub { font-size: 11px; }
+  .criterion h3 { font-size: 14px; }
+  .criterion p { font-size: 12px; }
+  .mobile-nav button {
+    min-height: 50px;
+    font-size: 11px;
+    gap: 5px;
+  }
+  .mobile-nav button span { font-size: 20px; }
+  .top-actions .btn { min-height: 44px; }
+}
+@media (max-width: 390px) {
+  .content { padding-inline: 13px; }
+  .metrics { gap: 10px; }
+  .metric { padding: 14px; }
+  .metric-value { font-size: 29px; }
+  .metric-label { font-size: 12px; gap: 7px; }
+  .filters { grid-template-columns: minmax(0, 1fr); }
+  .filters select { font-size: 14px; }
+  .criterion { grid-template-columns: minmax(0,1fr); }
+  .criterion-side { flex-direction: row; align-items: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page, .progress-fill { animation: none !important; transition: none !important; }
+}
