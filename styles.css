@@ -151,3 +151,12 @@
 @media(max-width:1100px){.github-runs-grid{grid-template-columns:1fr}}
 @media(max-width:450px){.github-run{flex-direction:column}.github-run-side{flex-direction:row;align-items:center;justify-content:space-between}.github-runs-project{padding:12px}}
 @media(prefers-reduced-motion:reduce){html:focus-within{scroll-behavior:auto!important}*,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important}}
+
+/* v1.7: proteção visível contra edição simultânea no mesmo navegador */
+.storage-conflict[hidden]{display:none!important}
+.storage-conflict{position:sticky;top:0;z-index:75;display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 22px;padding:14px 18px;border:1px solid #bd9659;border-radius:0 0 12px 12px;background:#332a1e;color:#f8e7c4;box-shadow:0 12px 36px #070a1499}
+.storage-conflict strong{font-size:14px;display:block}
+.storage-conflict p{margin:5px 0 0;color:#eedab7;font-size:12px;line-height:1.5;max-width:690px}
+.conflict-actions{display:flex;flex-shrink:0;gap:9px;flex-wrap:wrap}
+.conflict-actions button{min-height:44px;white-space:nowrap}
+@media(max-width:750px){.storage-conflict{margin:0 8px;display:block;padding:13px}.storage-conflict p{font-size:12px}.conflict-actions{margin-top:10px}.conflict-actions button{flex:1 1 150px;white-space:normal;min-height:46px}}

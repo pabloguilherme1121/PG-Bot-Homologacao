@@ -25,7 +25,7 @@ jobs:
       - name: Manifesto e estrutura
         run: |
           python3 -m json.tool manifest.json > /dev/null
-          python3 -m py_compile tests/smoke_v15.py
+          python3 -m py_compile tests/smoke_v15.py tests/cross_tab_smoke.py
           test -f assets/favicon.svg
 
   navegadores:
@@ -42,5 +42,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install playwright==1.58.0
           python -m playwright install --with-deps chromium firefox webkit
-      - name: Validar 3 motores em 2 resoluções
+      - name: Validar Chromium, Firefox e WebKit em 320/390 px
         run: python tests/smoke_v15.py
+      - name: Proteger registros em duas abas
+        env:
+          PG_USE_HTTP: '1'
+        run: python tests/cross_tab_smoke.py
