@@ -11,7 +11,8 @@ self.addEventListener('fetch', event=>{
   const req=event.request;
   if(req.method!=='GET')return;
   const url=new URL(req.url);
-  if(url.origin!==self.location.origin)return;
+  const scope=self.registration?.scope;
+  if(url.origin!==self.location.origin||(scope&&!url.href.startsWith(scope)))return;
   event.respondWith(
     fetch(req,{cache:'no-cache'}).then(response=>{
       if(response.ok){const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(req,copy)).catch(()=>{});}
