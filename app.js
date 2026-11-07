@@ -149,7 +149,12 @@
       &&v.criteria.every(r=>r&&typeof r.id==='string'&&typeof r.title==='string'&&typeof r.motor==='string'&&(!r.sha||typeof r.sha==='string')&&PROJECT[r.project]&&STATUS[r.status]&&validEvidence(r)&&(!r.evidence||safeUrl(r.evidence))&&(!r.comments||Array.isArray(r.comments)))
       &&v.prs.every(r=>r&&PROJECT[r.project]&&typeof r.sha==='string'&&typeof r.title==='string'&&typeof r.repo==='string'&&Array.isArray(r.runs)&&r.runs.every(x=>Array.isArray(x)&&x.length===2)&&r.stages&&['review','approval','merge','deploy'].every(k=>r.stages[k]&&STATUS[r.stages[k].status]&&validEvidence(r.stages[k],true)))
       &&v.actions.every(r=>r&&PROJECT[r.project]&&STATUS[r.status]&&validEvidence(r)&&(!r.evidence||safeUrl(r.evidence)))
-      &&v.android.every(r=>r&&PROJECT[r.project]&&typeof r.model==='string'&&typeof r.os==='string'&&typeof r.browser==='string'&&safeUrl(r.evidence)&&r.scenarios&&typeof r.scenarios==='object')
+      &&v.android.every(r=>r&&PROJECT[r.project]&&typeof r.model==='string'&&typeof r.os==='string'&&typeof r.browser==='string'
+        &&typeof r.date==='string'&&/^\\d{4}-\\d{2}-\\d{2}$/.test(r.date)
+        &&(r.sha===undefined||(typeof r.sha==='string'&&(!r.sha||SHA40.test(r.sha))))
+        &&(r.note===undefined||typeof r.note==='string')&&safeUrl(r.evidence)
+        &&r.scenarios&&typeof r.scenarios==='object'&&!Array.isArray(r.scenarios)
+        &&Object.entries(r.scenarios).every(([name,result])=>SCENARIOS.includes(name)&&['passou','falhou','nao_testado'].includes(result)))
       &&v.history.every(r=>r&&typeof r.title==='string'&&typeof r.date==='string')
     &&(!('releaseTargets' in v)||(v.releaseTargets&&typeof v.releaseTargets==='object'&&!Array.isArray(v.releaseTargets)&&Object.entries(v.releaseTargets).every(([p,r])=>PROJECT[p]&&r&&typeof r.sha==='string'&&typeof r.evidence==='string'&&typeof r.note==='string'&&(!r.sha||SHA40.test(r.sha))&&(!r.evidence||safeUrl(r.evidence)))))
     &&(!('qa' in v)||(Array.isArray(v.qa)&&v.qa.length<=50&&v.qa.every(q=>q&&PROJECT[q.project]&&BROWSERS.includes(q.browser)&&VIEWPORTS.includes(q.viewport)&&STATUS[q.status]&&typeof q.id==='string'&&typeof q.sha==='string'&&(!q.evidence||safeUrl(q.evidence))&&validEvidence(q,true))))
