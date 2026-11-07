@@ -330,3 +330,12 @@ test('falha do armazenamento não impede renderizar o registro em memória para 
  assert.match(el('#saveIndicator').textContent,/não salvo|exporte/i);
  assert.match(el('#historyList').innerHTML,/Critério atualizado/);
 });
+
+
+test('a central estática não executa scripts remotos fora de seu próprio código',()=>{
+ const html=fs.readFileSync(__dirname+'/../index.html','utf8');
+ const scriptTags=[...html.matchAll(/<script\b[^>]*>/gi)].map(match=>match[0]);
+ assert.equal(scriptTags.length,1,'apenas o script local da central deve ser carregado');
+ assert.match(scriptTags[0],/\bsrc="app\.js"/);
+ assert.doesNotMatch(html,/wix-site-script|manage\.wix\.com|data-client-id/i);
+});
