@@ -136,6 +136,19 @@
     }
     return v;
   }
+  // Evidência em um JSON é uma declaração do autor, não uma consulta autenticada.
+  // Preserva registros, comentários e histórico; revoga apenas afirmações do GitHub.
+  function normalizeExternalBackup(raw){
+    const imported=normalizeState(raw);
+    imported.github={checkedAt:'',projects:{},prs:{},errors:[],runs:{bot:[],estrategia:[],arcade:[]}};
+    for(const pr of imported.prs){
+      for(const stage of ['approval','merge','deploy']){
+        if(pr.stages?.[stage]?.status==='comprovado')
+          pr.stages[stage].status='pendente';
+      }
+    }
+    return imported;
+  }
   let knownStorageRaw = null;
   function load(){try {const raw=localStorage.getItem(STORAGE)??null;knownStorageRaw=raw;if(raw){const parsed=JSON.parse(raw);if(validateBackup(parsed))return normalizeState(parsed)}}catch(e){console.warn('Storage indisponível:',e)}return emptyState()}
   function validGithubRuns(gh){
@@ -462,7 +475,7 @@
     if(hasStorageConflict()){showStorageConflict();notify('Conflito de abas: exporte seu rascunho e recarregue antes de importar.');return}
     if(!window.confirm('Importar este backup? Isso substituirá os dados locais atuais. Uma cópia dos dados anteriores será mantida para recuperação.'))return;
     try{localStorage.setItem(PREVIOUS_IMPORT,JSON.stringify(state))}catch{throw new Error('Não foi possível salvar a recuperação anterior. Importação cancelada.')}
-    state=normalizeState(loaded);if(save('Backup JSON importado','Dados locais substituídos; versão anterior disponível na seção Histórico.'))notify('Backup importado. A versão anterior pode ser recuperada em Histórico.');
+    state=normalizeExternalBackup(loaded);if(save('Backup JSON importado','Dados preservados; consultas GitHub, aprovação, merge e deploy exigem nova verificação. Versão anterior disponível no Histórico.'))notify('Backup importado. Revalide GitHub, merge e deploy antes de declarar comprovação.');
   }catch(err){notify('Não foi possível importar: '+err.message)}finally{$('#importInput').value=''}}
   function restoreImport(){let old;
     try{const raw=localStorage.getItem(PREVIOUS_IMPORT);if(!raw){notify('Nenhuma versão anterior disponível.');return}old=JSON.parse(raw);if(!validateBackup(old))throw new Error('Cópia de recuperação inválida')}
