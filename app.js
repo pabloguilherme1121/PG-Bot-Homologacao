@@ -150,7 +150,7 @@
       &&v.prs.every(r=>r&&PROJECT[r.project]&&typeof r.sha==='string'&&typeof r.title==='string'&&typeof r.repo==='string'&&Array.isArray(r.runs)&&r.runs.every(x=>Array.isArray(x)&&x.length===2)&&r.stages&&['review','approval','merge','deploy'].every(k=>r.stages[k]&&STATUS[r.stages[k].status]&&validEvidence(r.stages[k],true)))
       &&v.actions.every(r=>r&&PROJECT[r.project]&&STATUS[r.status]&&validEvidence(r)&&(!r.evidence||safeUrl(r.evidence)))
       &&v.android.every(r=>r&&PROJECT[r.project]&&typeof r.model==='string'&&typeof r.os==='string'&&typeof r.browser==='string'
-        &&typeof r.date==='string'&&/^\\d{4}-\\d{2}-\\d{2}$/.test(r.date)
+        &&typeof r.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(r.date)
         &&(r.sha===undefined||(typeof r.sha==='string'&&(!r.sha||SHA40.test(r.sha))))
         &&(r.note===undefined||typeof r.note==='string')&&safeUrl(r.evidence)
         &&r.scenarios&&typeof r.scenarios==='object'&&!Array.isArray(r.scenarios)
