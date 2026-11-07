@@ -330,3 +330,24 @@ test('falha do armazenamento não impede renderizar o registro em memória para 
  assert.match(el('#saveIndicator').textContent,/não salvo|exporte/i);
  assert.match(el('#historyList').innerHTML,/Critério atualizado/);
 });
+
+
+test('backup Android rejeita SHA numérico e cenários fora do contrato antes de renderizar',()=>{
+ const {t}=env();
+ const valid=structuredClone(t.state);
+ valid.android.push({
+  id:'android-audit',project:'bot',model:'Galaxy',os:'Android 16',browser:'Chrome',
+  date:'2026-11-06',sha:'a'.repeat(40),evidence:'https://github.com/exemplo/runs/99',
+  note:'Validado no dispositivo',scenarios:{
+   'Toque e alvos':'passou','320 / 390 px':'passou','Orientação paisagem':'passou',
+   'Tela cheia':'passou','Offline e retorno':'passou','Pausa / reinício':'passou'
+  }
+ });
+ assert.equal(t.validateBackup(valid),true,'um registro completo de dispositivo continua válido');
+ const badSha=structuredClone(valid);badSha.android[0].sha=42;
+ assert.equal(t.validateBackup(badSha),false,'SHA numérico causa erro na interface e não pode entrar pelo backup');
+ const badScenario=structuredClone(valid);badScenario.android[0].scenarios=[];
+ assert.equal(t.validateBackup(badScenario),false,'lista não equivale ao mapa de cenários');
+ const badOutcome=structuredClone(valid);badOutcome.android[0].scenarios['Toque e alvos']={status:'passou'};
+ assert.equal(t.validateBackup(badOutcome),false,'um resultado não textual não constitui aprovação');
+});
