@@ -330,3 +330,46 @@ test('falha do armazenamento não impede renderizar o registro em memória para 
  assert.match(el('#saveIndicator').textContent,/não salvo|exporte/i);
  assert.match(el('#historyList').innerHTML,/Critério atualizado/);
 });
+
+
+test('backup Android rejeita SHA numérico e cenários fora do contrato antes de renderizar',()=>{
+ const {t}=env();
+ const valid=structuredClone(t.state);
+ valid.android.push({
+  id:'android-audit',project:'bot',model:'Galaxy',os:'Android 16',browser:'Chrome',
+  date:'2026-11-06',sha:'a'.repeat(40),evidence:'https://github.com/exemplo/runs/99',
+  note:'Validado no dispositivo',scenarios:{
+   'Toque e alvos':'passou','320 / 390 px':'passou','Orientação paisagem':'passou',
+   'Tela cheia':'passou','Offline e retorno':'passou','Pausa / reinício':'passou'
+  }
+ });
+ assert.equal(t.validateBackup(valid),true,'um registro completo de dispositivo continua válido');
+ const badSha=structuredClone(valid);badSha.android[0].sha=42;
+ assert.equal(t.validateBackup(badSha),false,'SHA numérico causa erro na interface e não pode entrar pelo backup');
+ const badScenario=structuredClone(valid);badScenario.android[0].scenarios=[];
+ assert.equal(t.validateBackup(badScenario),false,'lista não equivale ao mapa de cenários');
+ const badOutcome=structuredClone(valid);badOutcome.android[0].scenarios['Toque e alvos']={status:'passou'};
+ assert.equal(t.validateBackup(badOutcome),false,'um resultado não textual não constitui aprovação');
+});
+
+
+test('backup externo nao autentica consulta ao GitHub nem merge e deploy declarados',async()=>{
+ const {t}=env();
+ const before=t.state.criteria.length;
+ const imported=structuredClone(t.state);
+ imported.github.checkedAt='2026-11-06T23:00:00Z';
+ imported.github.projects.bot.sha='a'.repeat(40);
+ imported.github.projects.bot.observedAt='2026-11-06T23:00:00Z';
+ imported.github.prs['bot-19']={...imported.github.prs['bot-19'],state:'closed',merged:true,draft:false,sha:'a'.repeat(40)};
+ const pr=imported.prs.find(x=>x.id==='bot-19');
+ pr.stages.merge={status:'comprovado',sha:'a'.repeat(40),evidence:'https://github.com/pabloguilherme1121/PG-Bot/pull/19',note:'declarado no JSON'};
+ pr.stages.deploy={status:'comprovado',sha:'a'.repeat(40),evidence:'https://github.com/pabloguilherme1121/PG-Bot/actions/runs/123',note:'declarado no JSON'};
+ imported.criteria.push({...structuredClone(imported.criteria[1]),id:'backup-legitimo',title:'Registro do autor'});
+ await t.importJSON({size:1024,text:async()=>JSON.stringify(imported)});
+ assert.equal(t.state.criteria.length,before+1,'dados locais devem sobreviver a importacao');
+ assert.equal(t.state.github.checkedAt,'','arquivo nao e consulta ao GitHub');
+ assert.deepEqual(Object.keys(t.state.github.projects),[]);
+ assert.deepEqual(Object.keys(t.state.github.prs),[]);
+ assert.equal(t.state.prs.find(x=>x.id==='bot-19').stages.merge.status,'pendente');
+ assert.equal(t.state.prs.find(x=>x.id==='bot-19').stages.deploy.status,'pendente');
+});
